@@ -117,7 +117,7 @@ class App {
       this.#chatView.refreshConnectionState();
       if (detail.wasReconnecting) {
         this.#chatList.load();
-        this.#chatView.catchUp().catch(() => {});
+        this.#chatView.catchUp();
       }
     });
     socket.addEventListener("disconnected", () => {

@@ -220,8 +220,13 @@ export class WebSocketServer {
       case "message.read":
         await this.#markRead(client, payload);
         break;
+      case "connection.check":
+        client.connection.send(
+          JSON.stringify({ type: "connection.alive", payload: {} }),
+        );
+        break;
       default:
-        throw new ServiceError("unknown_event", `Unknown event: ${type}`);
+        throw new ServiceError("unknown_event", "Unknown event type");
     }
   }
 

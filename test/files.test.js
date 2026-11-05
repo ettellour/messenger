@@ -336,6 +336,26 @@ describe("upload limits", () => {
     assert.doesNotMatch(output.stdout, /Request failed/);
   });
 
+  it("removes an upload left unfinished by a killed server", async (t) => {
+    const { url, anna, dataDir, child, exited } = await setUpChat(t);
+    const { file } = await (
+      await upload(url, anna.cookie, "a.txt", "готов")
+    ).json();
+    const req = startRawUpload(url, anna.cookie, 1000);
+    const dir = join(dataDir, "files");
+
+    req.write(Buffer.alloc(10));
+    while ((await readdir(dir)).length < 2) {
+      await delay(5);
+    }
+    child.kill("SIGKILL");
+    await exited;
+
+    await startServer(t, dataDir);
+
+    assert.deepEqual(await readdir(dir), [file.id]);
+  });
+
   it("stops a stream that outgrows the limit without declaring its size", async (t) => {
     const dir = await makeTempDir(t);
     const files = new FileRepository(

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { mkdir, open, rename, rm } from "node:fs/promises";
+import { mkdir, open, readdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -9,6 +9,7 @@ import { ServiceError } from "../errors.js";
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_NAME_LENGTH = 255;
 const FALLBACK_NAME = "file";
+const UNFINISHED_SUFFIX = ".part";
 
 // The name is only shown to people and sent back in a header. On disk a file
 // lives under a random id, so a hostile name cannot reach the file system.
@@ -48,6 +49,12 @@ export class FileService {
 
   async load() {
     await mkdir(this.#dir, { recursive: true });
+    // Nothing is uploading yet, so these were left by a process that got killed.
+    for (const name of await readdir(this.#dir)) {
+      if (name.endsWith(UNFINISHED_SUFFIX)) {
+        await rm(join(this.#dir, name), { force: true });
+      }
+    }
   }
 
   async saveUpload({ uploadedBy, name, declaredSize, content }) {
@@ -83,7 +90,7 @@ export class FileService {
   }
 
   async #writeToDisk(id, content) {
-    const partPath = join(this.#dir, `${id}.part`);
+    const partPath = join(this.#dir, `${id}${UNFINISHED_SUFFIX}`);
     let size = 0;
     const maxBytes = this.#maxBytes;
     const sizeLimit = new Transform({
