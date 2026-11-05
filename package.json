@@ -1,0 +1,14 @@
+{
+  "name": "messenger",
+  "version": "1.0.0",
+  "description": "Real-time browser messenger on the Node.js standard library",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test \"test/**/*.test.js\""
+  }
+}
