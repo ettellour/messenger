@@ -19,7 +19,7 @@ const CONTENT_TYPES = {
 };
 
 const CONTENT_SECURITY_POLICY =
-  "default-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+  "default-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
 const STATUS_BY_CODE = {
   body_too_large: 413,

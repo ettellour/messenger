@@ -1,0 +1,163 @@
+const FIRST_RECONNECT_DELAY_MS = 1000;
+const LONGEST_RECONNECT_DELAY_MS = 30_000;
+const ACK_TIMEOUT_MS = 10_000;
+const SESSION_ENDED_CLOSE_CODE = 1008;
+
+export class SocketClient extends EventTarget {
+  #socket = null;
+  #isConnected = false;
+  #isStopped = true;
+  #unconfirmed = new Map();
+  #reconnectDelay = FIRST_RECONNECT_DELAY_MS;
+  #reconnectTimer = null;
+  #ackTimer = null;
+
+  constructor() {
+    super();
+    window.addEventListener("online", () => this.#reconnectNow());
+  }
+
+  get isConnected() {
+    return this.#isConnected;
+  }
+
+  get hasUnconfirmedMessages() {
+    return this.#unconfirmed.size > 0;
+  }
+
+  connect() {
+    this.#isStopped = false;
+    this.#open();
+  }
+
+  disconnect() {
+    this.#isStopped = true;
+    this.#unconfirmed.clear();
+    clearTimeout(this.#reconnectTimer);
+    clearTimeout(this.#ackTimer);
+    this.#ackTimer = null;
+    this.#dropSocket();
+  }
+
+  // Kept until the server confirms it. After a reconnect it goes out again with
+  // the same clientId, and the server recognises the repeat.
+  sendMessage(payload) {
+    this.#unconfirmed.set(payload.clientId, payload);
+    if (this.#isConnected) {
+      this.#send("message.send", payload);
+      this.#watchForAck();
+    }
+  }
+
+  markRead(chatId, messageId) {
+    if (this.#isConnected) {
+      this.#send("message.read", { chatId, messageId });
+    }
+  }
+
+  #open() {
+    const scheme = location.protocol === "https:" ? "wss" : "ws";
+    const socket = new WebSocket(`${scheme}://${location.host}/ws`);
+    this.#socket = socket;
+
+    socket.onopen = () => this.#handleOpen();
+    socket.onmessage = ({ data }) => this.#handleEvent(JSON.parse(data));
+    socket.onclose = ({ code }) => this.#handleClose(code);
+  }
+
+  #send(type, payload) {
+    this.#socket.send(JSON.stringify({ type, payload }));
+  }
+
+  #handleOpen() {
+    const wasReconnecting = this.#reconnectDelay > FIRST_RECONNECT_DELAY_MS;
+    this.#isConnected = true;
+    this.#reconnectDelay = FIRST_RECONNECT_DELAY_MS;
+
+    for (const payload of this.#unconfirmed.values()) {
+      this.#send("message.send", payload);
+    }
+    if (this.hasUnconfirmedMessages) {
+      this.#watchForAck();
+    }
+    this.dispatchEvent(
+      new CustomEvent("connected", { detail: { wasReconnecting } }),
+    );
+  }
+
+  #handleEvent({ type, payload }) {
+    if (type === "message.sent" || type === "error") {
+      this.#unconfirmed.delete(payload.clientId);
+      clearTimeout(this.#ackTimer);
+      this.#ackTimer = null;
+      if (this.hasUnconfirmedMessages) {
+        this.#watchForAck();
+      }
+    }
+    this.dispatchEvent(new CustomEvent(type, { detail: payload }));
+  }
+
+  #handleClose(code) {
+    this.#socket = null;
+    this.#isConnected = false;
+    clearTimeout(this.#ackTimer);
+    this.#ackTimer = null;
+
+    if (code === SESSION_ENDED_CLOSE_CODE) {
+      this.dispatchEvent(new CustomEvent("session-ended"));
+      return;
+    }
+    this.dispatchEvent(new CustomEvent("disconnected"));
+    this.#scheduleReconnect();
+  }
+
+  // A dead network often gives no close event for minutes. A missing reply is
+  // the first sign, so the connection is replaced rather than waited for.
+  #watchForAck() {
+    if (this.#ackTimer) {
+      return;
+    }
+    this.#ackTimer = setTimeout(() => {
+      this.#ackTimer = null;
+      if (this.hasUnconfirmedMessages) {
+        this.#dropSocket();
+        this.#handleClose();
+      }
+    }, ACK_TIMEOUT_MS);
+  }
+
+  #dropSocket() {
+    if (!this.#socket) {
+      return;
+    }
+    this.#socket.onopen = null;
+    this.#socket.onmessage = null;
+    this.#socket.onclose = null;
+    this.#socket.close();
+    this.#socket = null;
+    this.#isConnected = false;
+  }
+
+  #scheduleReconnect() {
+    if (this.#isStopped) {
+      return;
+    }
+    const jitter = Math.random() * 500;
+    this.#reconnectTimer = setTimeout(
+      () => this.#open(),
+      this.#reconnectDelay + jitter,
+    );
+    this.#reconnectDelay = Math.min(
+      this.#reconnectDelay * 2,
+      LONGEST_RECONNECT_DELAY_MS,
+    );
+  }
+
+  #reconnectNow() {
+    if (this.#isStopped || this.#socket) {
+      return;
+    }
+    clearTimeout(this.#reconnectTimer);
+    this.#open();
+  }
+}

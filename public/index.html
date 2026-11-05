@@ -4,8 +4,161 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Мессенджер</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.js"></script>
   </head>
   <body>
-    <main><h1>Мессенджер</h1></main>
+    <main id="sign-in" class="entry" hidden>
+      <h1>Мессенджер</h1>
+      <form id="login-form" class="entry-form">
+        <label for="login-code">Код для входа</label>
+        <input
+          id="login-code"
+          class="key"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck="false"
+          required
+        />
+        <p id="login-error" class="form-error" role="alert" hidden></p>
+        <button type="submit" class="primary">Войти</button>
+      </form>
+      <p class="entry-switch">
+        Ещё нет кода?
+        <button type="button" id="show-register" class="link">
+          Получить код
+        </button>
+      </p>
+    </main>
+
+    <main id="register" class="entry" hidden>
+      <h1>Новый аккаунт</h1>
+      <form id="register-form" class="entry-form">
+        <label for="register-name">Как вас зовут</label>
+        <input
+          id="register-name"
+          maxlength="40"
+          autocomplete="name"
+          aria-describedby="register-hint"
+          required
+        />
+        <p id="register-hint" class="hint">Это имя увидит ваш собеседник.</p>
+        <p id="register-error" class="form-error" role="alert" hidden></p>
+        <button type="submit" class="primary">Получить код</button>
+      </form>
+      <p class="entry-switch">
+        Код уже есть?
+        <button type="button" id="show-login" class="link">Войти</button>
+      </p>
+    </main>
+
+    <main id="new-code" class="entry" hidden>
+      <h1>Ваш код для входа</h1>
+      <p>
+        Сохраните его сейчас. Он показывается только один раз, и восстановить
+        его нельзя.
+      </p>
+      <p id="new-code-value" class="key key--large"></p>
+      <div class="entry-actions">
+        <button type="button" id="copy-new-code">Скопировать</button>
+        <button type="button" id="code-saved" class="primary">
+          Код сохранён, войти
+        </button>
+      </div>
+      <p id="new-code-error" class="form-error" role="alert" hidden></p>
+    </main>
+
+    <div id="messenger" class="messenger" hidden>
+      <p id="connection-banner" class="banner" role="status" hidden>
+        Нет связи. Сообщения уйдут, когда она вернётся.
+      </p>
+
+      <aside class="sidebar">
+        <h1 class="visually-hidden">Мессенджер</h1>
+        <header class="profile">
+          <div class="profile-row">
+            <p id="me-name" class="profile-name"></p>
+            <button type="button" id="logout" class="quiet">Выйти</button>
+          </div>
+          <div class="profile-row">
+            <p>Ваш ID: <span id="me-id" class="key"></span></p>
+            <button type="button" id="copy-id" class="quiet">
+              Скопировать
+            </button>
+          </div>
+        </header>
+
+        <form id="new-chat-form" class="new-chat">
+          <label for="peer-id">Новый чат: ID собеседника</label>
+          <div class="field-row">
+            <input
+              id="peer-id"
+              class="key"
+              autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+              required
+            />
+            <button type="submit">Открыть</button>
+          </div>
+          <p id="new-chat-error" class="form-error" role="alert" hidden></p>
+        </form>
+
+        <nav class="chats" aria-label="Чаты">
+          <div id="chat-list-status" class="chats-status" hidden>
+            <p id="chat-list-status-text"></p>
+            <button type="button" id="chat-list-retry" hidden>Повторить</button>
+          </div>
+          <ul id="chat-list" class="chat-list"></ul>
+        </nav>
+      </aside>
+
+      <main class="chat-pane">
+        <p id="no-chat" class="no-chat">
+          Выберите чат или начните новый по ID собеседника.
+        </p>
+
+        <div id="chat" class="chat" hidden>
+          <header class="chat-header">
+            <a class="button back-link" href="#/">Назад</a>
+            <div class="chat-title">
+              <h2 id="chat-name"></h2>
+              <p id="chat-peer-id" class="key"></p>
+            </div>
+          </header>
+
+          <div id="chat-scroll" class="chat-scroll">
+            <button type="button" id="load-older" class="load-older" hidden>
+              Показать сообщения раньше
+            </button>
+            <div id="chat-status" class="chat-status" hidden>
+              <p id="chat-status-text"></p>
+              <button type="button" id="chat-retry" hidden>Повторить</button>
+            </div>
+            <ol id="messages" class="messages" role="log"></ol>
+          </div>
+
+          <form id="composer" class="composer">
+            <label for="message-input">Сообщение</label>
+            <p id="composer-error" class="form-error" role="alert" hidden></p>
+            <div class="composer-row">
+              <button type="button" id="attach-file">Файл</button>
+              <input id="file-input" type="file" hidden />
+              <textarea
+                id="message-input"
+                rows="1"
+                maxlength="4000"
+                aria-describedby="composer-hint"
+              ></textarea>
+              <button type="submit" class="primary">Отправить</button>
+            </div>
+            <p id="composer-hint" class="visually-hidden">
+              Enter отправляет сообщение, Shift и Enter начинают новую строку.
+            </p>
+          </form>
+        </div>
+      </main>
+    </div>
   </body>
 </html>
