@@ -99,7 +99,12 @@ export class ChatView {
   }
 
   showMessage(message) {
-    if (message.chatId !== this.openChatId || !this.#isLoaded) {
+    if (message.chatId !== this.openChatId) {
+      return;
+    }
+    // The history on its way may have been read before this message was written.
+    if (!this.#isLoaded) {
+      this.#messages.set(message.id, message);
       return;
     }
     this.#keepingBottom(() => this.#appendMessage(message));
@@ -437,7 +442,7 @@ export class ChatView {
   #markRead() {
     const newestId = this.#newestMessageId();
     if (
-      this.#chat &&
+      this.#isLoaded &&
       newestId > this.#lastReadSent &&
       document.visibilityState === "visible"
     ) {
