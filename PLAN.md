@@ -91,7 +91,7 @@ test/
 ```
 User     { id, codeHash, name, createdAt }
 Session  { tokenHash, userId, expiresAt }
-Chat     { id, members: [userId, userId], createdBy, lastRead: { [userId]: messageId }, createdAt }
+Chat     { id, members: [userId, userId], createdBy, openedByPeer?, lastRead: { [userId]: messageId }, createdAt }
 Message  { id, chatId, from, clientId, type: 'text' | 'file', text?, fileId?, sentAt }
 File     { id, uploadedBy, name, size, uploadedAt }
 ```

@@ -40,6 +40,11 @@ export class ChatRepository {
     await this.#chatStore.save();
   }
 
+  async markOpenedByPeer(chat) {
+    chat.openedByPeer = true;
+    await this.#chatStore.save();
+  }
+
   async findChat(id) {
     return this.#chatsById.get(id) ?? null;
   }

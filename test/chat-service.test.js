@@ -342,6 +342,20 @@ describe("chat list", () => {
     assert.equal((await service.listChats(BORIS.id)).length, 0);
   });
 
+  it("keeps an empty chat for a peer who opened it too, also after a restart", async (t) => {
+    const { service, dir } = await createService(t);
+    const chat = await openChat(service);
+
+    await service.findOrCreateChat(BORIS.id, ANNA.id);
+
+    const restarted = new ChatService(await createRepositories(dir));
+    for (const current of [service, restarted]) {
+      const [view] = await current.listChats(BORIS.id);
+      assert.equal(view.id, chat.id);
+      assert.equal(view.peer.name, "Анна");
+    }
+  });
+
   it("shows the chat to the peer after the first message", async (t) => {
     const { service } = await createService(t);
     const chat = await openChat(service);

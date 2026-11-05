@@ -32,6 +32,9 @@ export class ChatService {
 
     const existing = await this.#chats.findChatBetween(userId, peerId);
     if (existing) {
+      if (existing.createdBy !== userId && !existing.openedByPeer) {
+        await this.#chats.markOpenedByPeer(existing);
+      }
       return {
         chat: await this.#describeChat(existing, userId),
         created: false,
@@ -52,9 +55,12 @@ export class ChatService {
   async listChats(userId) {
     const views = [];
     for (const chat of await this.#chats.listChatsOf(userId)) {
-      // A chat someone opened but never wrote in is not the peer's business yet.
+      // A chat someone opened but never wrote in is not the peer's business yet,
+      // unless the peer opened it as well.
       const isVisible =
-        chat.createdBy === userId || (await this.#chats.lastMessage(chat.id));
+        chat.createdBy === userId ||
+        chat.openedByPeer ||
+        (await this.#chats.lastMessage(chat.id));
       if (isVisible) {
         views.push(await this.#describeChat(chat, userId));
       }
