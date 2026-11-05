@@ -12,6 +12,7 @@ const ERROR_TEXT = {
   message_empty: "Сообщение пустое.",
 };
 const UNKNOWN_ERROR_TEXT = "Что-то пошло не так. Попробуйте ещё раз.";
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export function describeError(code) {
   return ERROR_TEXT[code] ?? UNKNOWN_ERROR_TEXT;
@@ -60,6 +61,8 @@ export class ApiClient {
       method: "PUT",
       headers: { "X-File-Name": encodeURIComponent(file.name) },
       body: file,
+      // A large file on a slow line may rightly take much longer.
+      signal: null,
     });
   }
 
@@ -74,7 +77,12 @@ export class ApiClient {
   async #request(path, options) {
     let response;
     try {
-      response = await fetch(path, options);
+      // Over a dead connection the browser would wait for minutes, and requests
+      // left hanging also use up the few connections it allows for one server.
+      response = await fetch(path, {
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        ...options,
+      });
     } catch {
       throw new ApiError("network");
     }

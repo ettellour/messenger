@@ -139,19 +139,33 @@ export class ChatView {
       return;
     }
 
+    try {
+      await this.#loadMissedMessages(chatId);
+      this.#markRead();
+    } catch {
+      // Going on would leave a hole in the feed that nobody would notice.
+      if (chatId === this.openChatId) {
+        await this.#loadHistory();
+      }
+    }
+  }
+
+  async #loadMissedMessages(chatId) {
+    // New messages keep arriving meanwhile, so the feed cannot serve as a cursor
+    // and these have to be sorted in above them.
+    let after = this.#newestMessageId();
     let hasMore = true;
     while (hasMore && chatId === this.openChatId) {
-      const page = await this.#api.getMessages(chatId, {
-        after: this.#newestMessageId(),
-      });
-      if (chatId === this.openChatId) {
-        this.#keepingBottom(() => {
-          page.messages.forEach((message) => this.#appendMessage(message));
-        });
-      }
+      const page = await this.#api.getMessages(chatId, { after });
       hasMore = page.hasMore;
+      if (chatId === this.openChatId && page.messages.length > 0) {
+        after = page.messages.at(-1).id;
+        page.messages.forEach((message) =>
+          this.#messages.set(message.id, message),
+        );
+        this.#keepingBottom(() => this.#renderAll());
+      }
     }
-    this.#markRead();
   }
 
   async #loadHistory() {
