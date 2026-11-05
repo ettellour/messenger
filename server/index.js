@@ -2,6 +2,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AuthService } from "./auth/AuthService.js";
 import { ChatService } from "./chat/ChatService.js";
+import { FileService } from "./files/FileService.js";
 import { Server } from "./http/Server.js";
 import { ChatRepository } from "./storage/ChatRepository.js";
 import { FileRepository } from "./storage/FileRepository.js";
@@ -42,8 +43,21 @@ async function createServerFromEnv() {
 
   const auth = new AuthService({ users, sessions });
   const chatService = new ChatService({ chats, users, files });
+  const fileService = new FileService({
+    files,
+    chats,
+    dir: join(dataDir, "files"),
+  });
+  await fileService.load();
+
   const sockets = new WebSocketServer({ auth, chatService });
-  return new Server({ auth, chatService, sockets, publicDir: PUBLIC_DIR });
+  return new Server({
+    auth,
+    chatService,
+    fileService,
+    sockets,
+    publicDir: PUBLIC_DIR,
+  });
 }
 
 async function main() {

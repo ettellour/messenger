@@ -24,6 +24,8 @@ const CONTENT_SECURITY_POLICY =
 const STATUS_BY_CODE = {
   body_too_large: 413,
   chat_not_found: 404,
+  file_not_found: 404,
+  file_too_large: 413,
   invalid_code: 401,
   unauthorized: 401,
   user_not_found: 404,
@@ -68,6 +70,23 @@ async function readJsonBody(req) {
   return body;
 }
 
+function decodeFileName(headerValue = "") {
+  try {
+    return decodeURIComponent(headerValue);
+  } catch {
+    throw new ServiceError("invalid_file_name", "File name is not encoded");
+  }
+}
+
+function buildAttachmentHeader(fileName) {
+  const asciiName = fileName.replace(/[^\x20-\x7e]|["\\]/g, "_");
+  const encodedName = encodeURIComponent(fileName).replace(
+    /['()*]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`;
+}
+
 function parseCursor(value) {
   if (value === null) {
     return undefined;
@@ -84,14 +103,23 @@ export class Server {
   #publicDir;
   #auth;
   #chatService;
+  #fileService;
   #sockets;
   #log;
   #loginAttempts;
   #registerAttempts;
 
-  constructor({ auth, chatService, sockets, publicDir, log = console.log }) {
+  constructor({
+    auth,
+    chatService,
+    fileService,
+    sockets,
+    publicDir,
+    log = console.log,
+  }) {
     this.#auth = auth;
     this.#chatService = chatService;
+    this.#fileService = fileService;
     this.#sockets = sockets;
     this.#publicDir = resolve(publicDir);
     this.#log = log;
@@ -144,6 +172,8 @@ export class Server {
     routes.add("GET", "/api/chats/:id/messages", (ctx) =>
       this.#getMessages(ctx),
     );
+    routes.add("PUT", "/api/files", (ctx) => this.#uploadFile(ctx));
+    routes.add("GET", "/api/files/:id", (ctx) => this.#downloadFile(ctx));
   }
 
   async #handleRequest(req, res) {
@@ -185,7 +215,8 @@ export class Server {
 
   #sendFailure(req, res, error) {
     const expected = error instanceof ServiceError;
-    if (!expected) {
+    const clientLeft = req.destroyed && !req.complete;
+    if (!expected && !clientLeft) {
       this.#log(`Request failed: ${error.stack}`);
     }
     if (res.headersSent || res.destroyed) {
@@ -280,6 +311,35 @@ export class Server {
       after: parseCursor(query.get("after")),
     });
     sendJson(res, 200, history);
+  }
+
+  async #uploadFile({ req, res }) {
+    const user = await this.#requireUser(req);
+    const file = await this.#fileService.saveUpload({
+      uploadedBy: user.id,
+      name: decodeFileName(req.headers["x-file-name"]),
+      declaredSize: Number(req.headers["content-length"] ?? 0),
+      content: req,
+    });
+    sendJson(res, 201, { file });
+  }
+
+  async #downloadFile({ req, res, params }) {
+    const user = await this.#requireUser(req);
+    const { file, content } = await this.#fileService.openForDownload(
+      params.id,
+      user.id,
+    );
+    // Always a download and never sniffed, otherwise an uploaded HTML file would
+    // open as a page on this origin and could act as the signed-in visitor.
+    res.writeHead(200, {
+      "Content-Type": "application/octet-stream",
+      "Content-Length": file.size,
+      "Content-Disposition": buildAttachmentHeader(file.name),
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
+    await this.#streamToClient(content, res);
   }
 
   async #serveStaticFile(req, res, path) {
