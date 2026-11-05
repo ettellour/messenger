@@ -23,8 +23,10 @@ const CONTENT_SECURITY_POLICY =
 
 const STATUS_BY_CODE = {
   body_too_large: 413,
+  chat_not_found: 404,
   invalid_code: 401,
   unauthorized: 401,
+  user_not_found: 404,
 };
 
 function sendJson(res, status, body, headers = {}) {
@@ -66,18 +68,30 @@ async function readJsonBody(req) {
   return body;
 }
 
+function parseCursor(value) {
+  if (value === null) {
+    return undefined;
+  }
+  if (!/^\d{1,16}$/.test(value)) {
+    throw new ServiceError("invalid_cursor", "Cursor must be a message id");
+  }
+  return Number(value);
+}
+
 export class Server {
   #http;
   #router = new Router();
   #publicDir;
   #auth;
+  #chatService;
   #sockets;
   #log;
   #loginAttempts;
   #registerAttempts;
 
-  constructor({ auth, sockets, publicDir, log = console.log }) {
+  constructor({ auth, chatService, sockets, publicDir, log = console.log }) {
     this.#auth = auth;
+    this.#chatService = chatService;
     this.#sockets = sockets;
     this.#publicDir = resolve(publicDir);
     this.#log = log;
@@ -125,6 +139,11 @@ export class Server {
     routes.add("POST", "/api/login", (ctx) => this.#login(ctx));
     routes.add("POST", "/api/logout", (ctx) => this.#logout(ctx));
     routes.add("GET", "/api/me", (ctx) => this.#getCurrentUser(ctx));
+    routes.add("GET", "/api/chats", (ctx) => this.#listChats(ctx));
+    routes.add("POST", "/api/chats", (ctx) => this.#openChat(ctx));
+    routes.add("GET", "/api/chats/:id/messages", (ctx) =>
+      this.#getMessages(ctx),
+    );
   }
 
   async #handleRequest(req, res) {
@@ -237,6 +256,30 @@ export class Server {
 
   async #getCurrentUser({ req, res }) {
     sendJson(res, 200, { user: await this.#requireUser(req) });
+  }
+
+  async #listChats({ req, res }) {
+    const user = await this.#requireUser(req);
+    sendJson(res, 200, { chats: await this.#chatService.listChats(user.id) });
+  }
+
+  async #openChat({ req, res }) {
+    const user = await this.#requireUser(req);
+    const { peerId } = await readJsonBody(req);
+    const { chat, created } = await this.#chatService.findOrCreateChat(
+      user.id,
+      peerId,
+    );
+    sendJson(res, created ? 201 : 200, { chat });
+  }
+
+  async #getMessages({ req, res, params, query }) {
+    const user = await this.#requireUser(req);
+    const history = await this.#chatService.getHistory(params.id, user.id, {
+      before: parseCursor(query.get("before")),
+      after: parseCursor(query.get("after")),
+    });
+    sendJson(res, 200, history);
   }
 
   async #serveStaticFile(req, res, path) {

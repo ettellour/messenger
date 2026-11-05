@@ -1,7 +1,10 @@
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AuthService } from "./auth/AuthService.js";
+import { ChatService } from "./chat/ChatService.js";
 import { Server } from "./http/Server.js";
+import { ChatRepository } from "./storage/ChatRepository.js";
+import { FileRepository } from "./storage/FileRepository.js";
 import { JsonStore } from "./storage/JsonStore.js";
 import { SessionRepository } from "./storage/SessionRepository.js";
 import { UserRepository } from "./storage/UserRepository.js";
@@ -25,11 +28,22 @@ async function createServerFromEnv() {
 
   const users = new UserRepository(store("users", { users: [] }));
   const sessions = new SessionRepository(store("sessions", { sessions: [] }));
-  await Promise.all([users.load(), sessions.load()]);
+  const files = new FileRepository(store("files", { files: [] }));
+  const chats = new ChatRepository({
+    chatStore: store("chats", { chats: [] }),
+    messageStore: store("messages", { messages: [] }),
+  });
+  await Promise.all([
+    users.load(),
+    sessions.load(),
+    files.load(),
+    chats.load(),
+  ]);
 
   const auth = new AuthService({ users, sessions });
-  const sockets = new WebSocketServer({ auth });
-  return new Server({ auth, sockets, publicDir: PUBLIC_DIR });
+  const chatService = new ChatService({ chats, users, files });
+  const sockets = new WebSocketServer({ auth, chatService });
+  return new Server({ auth, chatService, sockets, publicDir: PUBLIC_DIR });
 }
 
 async function main() {

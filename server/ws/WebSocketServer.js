@@ -52,12 +52,19 @@ function findHandshakeProblem(req) {
 
 export class WebSocketServer {
   #auth;
+  #chatService;
   #log;
   #clientsByUser = new Map();
   #pingTimer;
 
-  constructor({ auth, log = console.log, pingIntervalMs = 30_000 }) {
+  constructor({
+    auth,
+    chatService,
+    log = console.log,
+    pingIntervalMs = 30_000,
+  }) {
     this.#auth = auth;
+    this.#chatService = chatService;
     this.#log = log;
     this.#pingTimer = setInterval(
       () => this.#checkConnections(),
@@ -205,8 +212,46 @@ export class WebSocketServer {
     return event;
   }
 
-  async #applyEvent(client, type) {
-    throw new ServiceError("unknown_event", `Unknown event: ${type}`);
+  async #applyEvent(client, type, payload) {
+    switch (type) {
+      case "message.send":
+        await this.#sendMessage(client, payload);
+        break;
+      case "message.read":
+        await this.#markRead(client, payload);
+        break;
+      default:
+        throw new ServiceError("unknown_event", `Unknown event: ${type}`);
+    }
+  }
+
+  async #sendMessage({ connection, user }, payload) {
+    const { message, created, memberIds } = await this.#chatService.sendMessage(
+      user.id,
+      payload,
+    );
+    connection.send(
+      JSON.stringify({
+        type: "message.sent",
+        payload: { clientId: payload.clientId, message },
+      }),
+    );
+
+    // A repeat is the sender retrying after a lost reply: everyone else has it.
+    if (!created) {
+      return;
+    }
+    for (const memberId of memberIds) {
+      this.sendToUser(memberId, "message.new", { message }, connection);
+      this.sendToUser(memberId, "chat.updated", {
+        chat: await this.#chatService.getChat(message.chatId, memberId),
+      });
+    }
+  }
+
+  async #markRead({ user }, { chatId, messageId }) {
+    const chat = await this.#chatService.markRead(user.id, chatId, messageId);
+    this.sendToUser(user.id, "chat.updated", { chat });
   }
 
   #reportEventFailure({ connection, user }, error, clientId) {
