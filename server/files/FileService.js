@@ -80,13 +80,18 @@ export class FileService {
     const canRead =
       file &&
       (file.uploadedBy === userId ||
-        (await this.#chats.isFileSharedWith(fileId, userId)));
+        (await this.#isSharedWith(fileId, userId)));
     if (!canRead) {
       throw new ServiceError("file_not_found", "File not found");
     }
 
     const handle = await open(join(this.#dir, file.id));
     return { file, content: handle.createReadStream() };
+  }
+
+  async #isSharedWith(fileId, userId) {
+    const chats = await this.#chats.chatsWithFile(fileId);
+    return chats.some(({ members }) => members.includes(userId));
   }
 
   async #writeToDisk(id, content) {

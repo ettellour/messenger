@@ -171,9 +171,17 @@ export class ChatService {
       lastMessage: lastMessage
         ? await this.#describeMessage(lastMessage)
         : null,
-      unreadCount: await this.#chats.countUnread(chat, userId),
+      unreadCount: await this.#countUnread(chat, userId),
       updatedAt: lastMessage?.sentAt ?? chat.createdAt,
     };
+  }
+
+  async #countUnread(chat, userId) {
+    const { messages } = await this.#chats.messagesAfter(
+      chat.id,
+      chat.lastRead[userId] ?? 0,
+    );
+    return messages.filter(({ from }) => from !== userId).length;
   }
 
   async #describeMessage(message) {
