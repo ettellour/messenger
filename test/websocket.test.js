@@ -267,6 +267,20 @@ describe("WebSocket events", () => {
     );
   });
 
+  it("answers a connection check", async (t) => {
+    const { port } = await startSocketServer(t);
+    const client = openClient(t, port);
+    await once(client, "open");
+
+    client.send(JSON.stringify({ type: "connection.check", payload: {} }));
+
+    const [{ data }] = await once(client, "message");
+    assert.deepEqual(JSON.parse(data), {
+      type: "connection.alive",
+      payload: {},
+    });
+  });
+
   it("delivers to every connection of a user", async (t) => {
     const { sockets, port } = await startSocketServer(t);
     const first = openClient(t, port);

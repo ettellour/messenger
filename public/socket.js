@@ -1,6 +1,7 @@
 const FIRST_RECONNECT_DELAY_MS = 1000;
 const LONGEST_RECONNECT_DELAY_MS = 30_000;
-const ACK_TIMEOUT_MS = 10_000;
+const REPLY_TIMEOUT_MS = 10_000;
+const CONNECTION_CHECK_INTERVAL_MS = 25_000;
 const SESSION_ENDED_CLOSE_CODE = 1008;
 
 export class SocketClient extends EventTarget {
@@ -10,11 +11,17 @@ export class SocketClient extends EventTarget {
   #unconfirmed = new Map();
   #reconnectDelay = FIRST_RECONNECT_DELAY_MS;
   #reconnectTimer = null;
-  #ackTimer = null;
+  #replyTimer = null;
+  #checkTimer = null;
 
   constructor() {
     super();
-    window.addEventListener("online", () => this.#reconnectNow());
+    window.addEventListener("online", () => this.#checkConnectionNow());
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        this.#checkConnectionNow();
+      }
+    });
   }
 
   get isConnected() {
@@ -34,8 +41,7 @@ export class SocketClient extends EventTarget {
     this.#isStopped = true;
     this.#unconfirmed.clear();
     clearTimeout(this.#reconnectTimer);
-    clearTimeout(this.#ackTimer);
-    this.#ackTimer = null;
+    this.#stopWatching();
     this.#dropSocket();
   }
 
@@ -45,7 +51,7 @@ export class SocketClient extends EventTarget {
     this.#unconfirmed.set(payload.clientId, payload);
     if (this.#isConnected) {
       this.#send("message.send", payload);
-      this.#watchForAck();
+      this.#waitForReply();
     }
   }
 
@@ -63,6 +69,8 @@ export class SocketClient extends EventTarget {
     socket.onopen = () => this.#handleOpen();
     socket.onmessage = ({ data }) => this.#handleEvent(JSON.parse(data));
     socket.onclose = ({ code }) => this.#handleClose(code);
+    // An attempt to connect can hang as silently as a working connection.
+    this.#waitForReply();
   }
 
   #send(type, payload) {
@@ -73,12 +81,14 @@ export class SocketClient extends EventTarget {
     const wasReconnecting = this.#reconnectDelay > FIRST_RECONNECT_DELAY_MS;
     this.#isConnected = true;
     this.#reconnectDelay = FIRST_RECONNECT_DELAY_MS;
+    this.#noteReply();
+    this.#checkTimer = setInterval(
+      () => this.#checkConnection(),
+      CONNECTION_CHECK_INTERVAL_MS,
+    );
 
     for (const payload of this.#unconfirmed.values()) {
       this.#send("message.send", payload);
-    }
-    if (this.hasUnconfirmedMessages) {
-      this.#watchForAck();
     }
     this.dispatchEvent(
       new CustomEvent("connected", { detail: { wasReconnecting } }),
@@ -88,20 +98,15 @@ export class SocketClient extends EventTarget {
   #handleEvent({ type, payload }) {
     if (type === "message.sent" || type === "error") {
       this.#unconfirmed.delete(payload.clientId);
-      clearTimeout(this.#ackTimer);
-      this.#ackTimer = null;
-      if (this.hasUnconfirmedMessages) {
-        this.#watchForAck();
-      }
     }
+    this.#noteReply();
     this.dispatchEvent(new CustomEvent(type, { detail: payload }));
   }
 
   #handleClose(code) {
     this.#socket = null;
     this.#isConnected = false;
-    clearTimeout(this.#ackTimer);
-    this.#ackTimer = null;
+    this.#stopWatching();
 
     if (code === SESSION_ENDED_CLOSE_CODE) {
       this.dispatchEvent(new CustomEvent("session-ended"));
@@ -111,19 +116,37 @@ export class SocketClient extends EventTarget {
     this.#scheduleReconnect();
   }
 
+  // Browsers answer the server's ping frames on their own and hide them from the
+  // page, so an idle page has to ask for itself whether the server still hears it.
+  #checkConnection() {
+    this.#send("connection.check", {});
+    this.#waitForReply();
+  }
+
   // A dead network often gives no close event for minutes. A missing reply is
   // the first sign, so the connection is replaced rather than waited for.
-  #watchForAck() {
-    if (this.#ackTimer) {
+  #waitForReply() {
+    if (this.#replyTimer) {
       return;
     }
-    this.#ackTimer = setTimeout(() => {
-      this.#ackTimer = null;
-      if (this.hasUnconfirmedMessages) {
-        this.#dropSocket();
-        this.#handleClose();
-      }
-    }, ACK_TIMEOUT_MS);
+    this.#replyTimer = setTimeout(() => {
+      this.#dropSocket();
+      this.#handleClose();
+    }, REPLY_TIMEOUT_MS);
+  }
+
+  #noteReply() {
+    clearTimeout(this.#replyTimer);
+    this.#replyTimer = null;
+    if (this.hasUnconfirmedMessages) {
+      this.#waitForReply();
+    }
+  }
+
+  #stopWatching() {
+    clearInterval(this.#checkTimer);
+    clearTimeout(this.#replyTimer);
+    this.#replyTimer = null;
   }
 
   #dropSocket() {
@@ -153,11 +176,12 @@ export class SocketClient extends EventTarget {
     );
   }
 
-  #reconnectNow() {
-    if (this.#isStopped || this.#socket) {
-      return;
+  #checkConnectionNow() {
+    if (this.#isConnected) {
+      this.#checkConnection();
+    } else if (!this.#isStopped && !this.#socket) {
+      clearTimeout(this.#reconnectTimer);
+      this.#open();
     }
-    clearTimeout(this.#reconnectTimer);
-    this.#open();
   }
 }
