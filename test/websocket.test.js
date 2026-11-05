@@ -250,6 +250,23 @@ describe("WebSocket events", () => {
     assert.equal(client.readyState, WebSocket.OPEN);
   });
 
+  it("treats a type that is not a string as unknown and logs nothing", async (t) => {
+    const logged = [];
+    const { port } = await startSocketServer(t, {
+      log: (line) => logged.push(line),
+    });
+    const client = openClient(t, port);
+    await once(client, "open");
+
+    client.send(JSON.stringify({ type: { toString: 1 }, payload: {} }));
+
+    assert.equal(await nextError(client), "unknown_event");
+    assert.deepEqual(
+      logged.filter((line) => line.startsWith("Event failed")),
+      [],
+    );
+  });
+
   it("delivers to every connection of a user", async (t) => {
     const { sockets, port } = await startSocketServer(t);
     const first = openClient(t, port);

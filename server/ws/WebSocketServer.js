@@ -221,7 +221,7 @@ export class WebSocketServer {
         await this.#markRead(client, payload);
         break;
       default:
-        throw new ServiceError("unknown_event", `Unknown event: ${type}`);
+        throw new ServiceError("unknown_event", "Unknown event type");
     }
   }
 
