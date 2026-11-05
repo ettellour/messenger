@@ -83,7 +83,6 @@ export class SocketClient extends EventTarget {
   }
 
   #handleOpen() {
-    const wasReconnecting = this.#reconnectDelay > FIRST_RECONNECT_DELAY_MS;
     this.#isConnected = true;
     this.#reconnectDelay = FIRST_RECONNECT_DELAY_MS;
     this.#noteReply();
@@ -98,9 +97,7 @@ export class SocketClient extends EventTarget {
     for (const [chatId, messageId] of this.#readMarks) {
       this.#send("message.read", { chatId, messageId });
     }
-    this.dispatchEvent(
-      new CustomEvent("connected", { detail: { wasReconnecting } }),
-    );
+    this.dispatchEvent(new CustomEvent("connected"));
   }
 
   #handleEvent({ type, payload }) {

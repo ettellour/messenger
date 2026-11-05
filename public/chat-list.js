@@ -14,6 +14,7 @@ export class ChatList {
   #api;
   #myId = null;
   #chats = new Map();
+  #hasLoaded = false;
   #openChatId = null;
   #list = document.getElementById("chat-list");
   #status = document.getElementById("chat-list-status");
@@ -28,17 +29,19 @@ export class ChatList {
   reset(myId) {
     this.#myId = myId;
     this.#chats.clear();
+    this.#hasLoaded = false;
     this.#openChatId = null;
     this.#list.replaceChildren();
   }
 
   async load() {
-    if (this.#chats.size === 0) {
+    if (!this.#hasLoaded) {
       this.#showStatus("Загружаем чаты");
     }
     try {
       const { chats } = await this.#api.listChats();
       this.#chats = new Map(chats.map((chat) => [chat.id, chat]));
+      this.#hasLoaded = true;
       this.#render();
     } catch {
       this.#showStatus("Не получилось загрузить чаты.", { canRetry: true });

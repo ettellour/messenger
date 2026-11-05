@@ -48,9 +48,7 @@ function startClient(t) {
   const client = new SocketClient();
   const events = [];
   for (const type of ["connected", "disconnected", "session-ended"]) {
-    client.addEventListener(type, ({ detail }) => {
-      events.push({ type, detail });
-    });
+    client.addEventListener(type, () => events.push(type));
   }
   client.connect();
   return {
@@ -59,10 +57,6 @@ function startClient(t) {
     events,
     tick: (milliseconds) => t.mock.timers.tick(milliseconds),
   };
-}
-
-function lastEventType(events) {
-  return events.at(-1)?.type;
 }
 
 describe("noticing a dead connection", () => {
@@ -76,7 +70,7 @@ describe("noticing a dead connection", () => {
     tick(REPLY_TIMEOUT_MS);
 
     assert.equal(sockets[0].isClosed, false);
-    assert.equal(lastEventType(events), "connected");
+    assert.equal(events.at(-1), "connected");
   });
 
   it("replaces a connection that does not answer and tells about the return", (t) => {
@@ -88,15 +82,12 @@ describe("noticing a dead connection", () => {
 
     assert.equal(sockets[0].isClosed, true);
     assert.equal(client.isConnected, false);
-    assert.equal(lastEventType(events), "disconnected");
+    assert.equal(events.at(-1), "disconnected");
 
     tick(FIRST_RECONNECT_WITH_JITTER_MS);
     sockets[1].onopen();
 
-    assert.deepEqual(events.at(-1), {
-      type: "connected",
-      detail: { wasReconnecting: true },
-    });
+    assert.equal(events.at(-1), "connected");
   });
 
   it("gives up on an attempt to connect that hangs", (t) => {
@@ -105,7 +96,7 @@ describe("noticing a dead connection", () => {
     tick(REPLY_TIMEOUT_MS);
 
     assert.equal(sockets[0].isClosed, true);
-    assert.equal(lastEventType(events), "disconnected");
+    assert.equal(events.at(-1), "disconnected");
 
     tick(FIRST_RECONNECT_WITH_JITTER_MS);
 
@@ -141,7 +132,7 @@ describe("noticing a dead connection", () => {
 
     tick(REPLY_TIMEOUT_MS);
 
-    assert.equal(lastEventType(events), "disconnected");
+    assert.equal(events.at(-1), "disconnected");
   });
 
   it("checks at once when the tab becomes visible", (t) => {
@@ -195,7 +186,7 @@ describe("noticing a dead connection", () => {
     sockets[0].onclose({ code: 1008 });
     tick(FIRST_RECONNECT_WITH_JITTER_MS);
 
-    assert.equal(lastEventType(events), "session-ended");
+    assert.equal(events.at(-1), "session-ended");
     assert.equal(sockets.length, 1);
   });
 });

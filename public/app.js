@@ -112,13 +112,13 @@ class App {
   #listenToSocket() {
     const socket = this.#socket;
 
-    socket.addEventListener("connected", ({ detail }) => {
+    socket.addEventListener("connected", () => {
       byId("connection-banner").hidden = true;
       this.#chatView.refreshConnectionState();
-      if (detail.wasReconnecting) {
-        this.#chatList.load();
-        this.#chatView.catchUp();
-      }
+      // Whatever was written before the server knew this connection was not pushed
+      // to it, and a page's first connection opens after its first requests.
+      this.#chatList.load();
+      this.#chatView.catchUp();
     });
     socket.addEventListener("disconnected", () => {
       byId("connection-banner").hidden = false;
