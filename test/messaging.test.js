@@ -249,6 +249,18 @@ describe("errors over the socket", () => {
 
     assert.equal(await closed, 1008);
   });
+
+  it("says goodbye and exits cleanly when the server stops", async (t) => {
+    const { server, url, anna } = await setUpChat(t);
+    const socket = await TestSocket.open(t, url, anna.cookie);
+
+    const closed = socket.closed();
+    server.child.kill("SIGTERM");
+
+    assert.equal(await closed, 1001);
+    const [exitCode] = await server.exited;
+    assert.equal(exitCode, 0);
+  });
 });
 
 describe("chats over HTTP", () => {
