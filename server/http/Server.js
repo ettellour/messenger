@@ -71,12 +71,14 @@ export class Server {
   #router = new Router();
   #publicDir;
   #auth;
+  #sockets;
   #log;
   #loginAttempts;
   #registerAttempts;
 
-  constructor({ auth, publicDir, log = console.log }) {
+  constructor({ auth, sockets, publicDir, log = console.log }) {
     this.#auth = auth;
+    this.#sockets = sockets;
     this.#publicDir = resolve(publicDir);
     this.#log = log;
 
@@ -85,6 +87,9 @@ export class Server {
     this.#registerAttempts = new RateLimiter(limit);
 
     this.#http = createServer((req, res) => this.#handleRequest(req, res));
+    this.#http.on("upgrade", (req, socket, earlyData) => {
+      sockets.handleUpgrade(req, socket, earlyData);
+    });
     this.#addRoutes();
   }
 
@@ -99,8 +104,8 @@ export class Server {
     });
   }
 
-  stop() {
-    return new Promise((resolvePromise) => {
+  async stop() {
+    const httpClosed = new Promise((resolvePromise) => {
       const forceClose = setTimeout(
         () => this.#http.closeAllConnections(),
         FORCE_CLOSE_AFTER_MS,
@@ -111,6 +116,7 @@ export class Server {
       });
       this.#http.closeIdleConnections();
     });
+    await Promise.all([this.#sockets.stop(), httpClosed]);
   }
 
   #addRoutes() {
@@ -223,6 +229,7 @@ export class Server {
     const token = readSessionToken(req);
     if (token) {
       await this.#auth.logout(token);
+      this.#sockets.closeSession(token);
     }
     res.writeHead(204, { "Set-Cookie": buildSessionCookie("", 0) });
     res.end();

@@ -49,6 +49,26 @@ export async function startServer(t, dataDir) {
   return { ...server, url, dataDir: directory };
 }
 
+export function maskedFrame(firstByte, payload) {
+  const mask = [1, 2, 3, 4];
+  const body = Buffer.from(payload.map((byte, i) => byte ^ mask[i % 4]));
+
+  let lengthBytes;
+  if (payload.length < 126) {
+    lengthBytes = [0x80 | payload.length];
+  } else if (payload.length < 65536) {
+    lengthBytes = [0x80 | 126, payload.length >> 8, payload.length & 0xff];
+  } else {
+    const longLength = Buffer.alloc(8);
+    longLength.writeBigUInt64BE(BigInt(payload.length));
+    lengthBytes = [0x80 | 127, ...longLength];
+  }
+  return Buffer.concat([
+    Buffer.from([firstByte, ...lengthBytes, ...mask]),
+    body,
+  ]);
+}
+
 export function postJson(url, body, headers = {}) {
   return fetch(url, {
     method: "POST",

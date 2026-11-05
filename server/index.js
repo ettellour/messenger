@@ -5,6 +5,7 @@ import { Server } from "./http/Server.js";
 import { JsonStore } from "./storage/JsonStore.js";
 import { SessionRepository } from "./storage/SessionRepository.js";
 import { UserRepository } from "./storage/UserRepository.js";
+import { WebSocketServer } from "./ws/WebSocketServer.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../public/", import.meta.url));
 
@@ -27,7 +28,8 @@ async function createServerFromEnv() {
   await Promise.all([users.load(), sessions.load()]);
 
   const auth = new AuthService({ users, sessions });
-  return new Server({ auth, publicDir: PUBLIC_DIR });
+  const sockets = new WebSocketServer({ auth });
+  return new Server({ auth, sockets, publicDir: PUBLIC_DIR });
 }
 
 async function main() {
