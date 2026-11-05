@@ -9,6 +9,7 @@ export class SocketClient extends EventTarget {
   #isConnected = false;
   #isStopped = true;
   #unconfirmed = new Map();
+  #readMarks = new Map();
   #reconnectDelay = FIRST_RECONNECT_DELAY_MS;
   #reconnectTimer = null;
   #replyTimer = null;
@@ -40,6 +41,7 @@ export class SocketClient extends EventTarget {
   disconnect() {
     this.#isStopped = true;
     this.#unconfirmed.clear();
+    this.#readMarks.clear();
     clearTimeout(this.#reconnectTimer);
     this.#stopWatching();
     this.#dropSocket();
@@ -55,7 +57,10 @@ export class SocketClient extends EventTarget {
     }
   }
 
+  // Repeated on every new connection: the last mark may never have left, or may
+  // have gone down with the old connection, and the server ignores what it has.
   markRead(chatId, messageId) {
+    this.#readMarks.set(chatId, messageId);
     if (this.#isConnected) {
       this.#send("message.read", { chatId, messageId });
     }
@@ -89,6 +94,9 @@ export class SocketClient extends EventTarget {
 
     for (const payload of this.#unconfirmed.values()) {
       this.#send("message.send", payload);
+    }
+    for (const [chatId, messageId] of this.#readMarks) {
+      this.#send("message.read", { chatId, messageId });
     }
     this.dispatchEvent(
       new CustomEvent("connected", { detail: { wasReconnecting } }),

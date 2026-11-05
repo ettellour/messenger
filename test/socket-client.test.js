@@ -200,6 +200,72 @@ describe("noticing a dead connection", () => {
   });
 });
 
+describe("read marks", () => {
+  function readEvent(chatId, messageId) {
+    return { type: "message.read", payload: { chatId, messageId } };
+  }
+
+  it("wait for the connection to open", (t) => {
+    const { client, sockets } = startClient(t);
+
+    client.markRead("chat", 5);
+    assert.deepEqual(sockets[0].sent, []);
+    sockets[0].onopen();
+
+    assert.deepEqual(sockets[0].sent, [readEvent("chat", 5)]);
+  });
+
+  it("made without a connection go out after the reconnect", (t) => {
+    const { client, sockets, tick } = startClient(t);
+    sockets[0].onopen();
+    sockets[0].onclose({ code: 1006 });
+
+    client.markRead("chat", 5);
+    tick(FIRST_RECONNECT_WITH_JITTER_MS);
+    sockets[1].onopen();
+
+    assert.deepEqual(sockets[1].sent, [readEvent("chat", 5)]);
+  });
+
+  it("go out again in case the old connection lost them", (t) => {
+    const { client, sockets, tick } = startClient(t);
+    sockets[0].onopen();
+    client.markRead("chat", 5);
+    assert.deepEqual(sockets[0].sent, [readEvent("chat", 5)]);
+
+    sockets[0].onclose({ code: 1006 });
+    tick(FIRST_RECONNECT_WITH_JITTER_MS);
+    sockets[1].onopen();
+
+    assert.deepEqual(sockets[1].sent, [readEvent("chat", 5)]);
+  });
+
+  it("keep the newest one of every chat", (t) => {
+    const { client, sockets } = startClient(t);
+
+    client.markRead("first", 1);
+    client.markRead("first", 2);
+    client.markRead("second", 3);
+    sockets[0].onopen();
+
+    assert.deepEqual(sockets[0].sent, [
+      readEvent("first", 2),
+      readEvent("second", 3),
+    ]);
+  });
+
+  it("are forgotten on sign out", (t) => {
+    const { client, sockets } = startClient(t);
+    client.markRead("chat", 5);
+
+    client.disconnect();
+    client.connect();
+    sockets[1].onopen();
+
+    assert.deepEqual(sockets[1].sent, []);
+  });
+});
+
 describe("messages waiting for confirmation", () => {
   const message = { chatId: "chat", clientId: "c1", text: "привет" };
 
