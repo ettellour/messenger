@@ -41,6 +41,7 @@ server/
   http/Server.js              http.createServer, роутинг, раздача public/
   http/Router.js              метод + путь → обработчик
   http/RateLimiter.js         попытки входа и регистрации: 10 в минуту на IP
+  http/sessionCookie.js       чтение и сборка cookie сессии
   ws/WebSocketServer.js       handshake на Upgrade, реестр соединений по userId
   ws/WebSocketConnection.js   чтение кадров, события message/close
   ws/frames.js                разбор и сборка фреймов
@@ -62,6 +63,7 @@ public/
   chat-list.js        ChatList: список, непрочитанные, свой id и поле «новый чат»
   chat-view.js        ChatView: история, ввод, отправка файла
   format.js           время и размер файла для показа
+  ui.js               мелкие помощники: создание элементов, копирование
 test/
 ```
 
