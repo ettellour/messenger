@@ -452,14 +452,20 @@ button.link {
 .messages {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   max-width: 800px;
   margin: 0 auto;
 }
 
+/* A new speaker gets more room than a run of one person's messages. */
+.message--own + .message:not(.message--own),
+.message:not(.message--own) + .message--own {
+  margin-top: 8px;
+}
+
 .day {
   align-self: center;
-  padding: 8px 0;
+  padding: 12px 0;
   color: var(--muted);
   font-size: 13px;
 }
