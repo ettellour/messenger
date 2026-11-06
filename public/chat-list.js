@@ -5,8 +5,11 @@ function describeLastMessage(message, myId) {
   if (!message) {
     return "Сообщений пока нет";
   }
+  const caption = message.text === undefined ? "" : `. ${message.text}`;
   const content =
-    message.type === "file" ? `Файл: ${message.file.name}` : message.text;
+    message.type === "file"
+      ? `Файл: ${message.file.name}${caption}`
+      : message.text;
   return message.from === myId ? `Вы: ${content}` : content;
 }
 

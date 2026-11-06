@@ -99,7 +99,7 @@ export class ChatService {
     const content =
       fileId === undefined
         ? this.#buildTextContent(text)
-        : await this.#buildFileContent(userId, fileId);
+        : await this.#buildFileContent(userId, fileId, text);
     const { message, created } = await this.#chats.addMessage({
       chatId: chat.id,
       from: userId,
@@ -141,23 +141,39 @@ export class ChatService {
     if (typeof text !== "string" || text.trim() === "") {
       throw new ServiceError("message_empty", "Message is empty");
     }
+    this.#checkLength(text);
+    return { type: "text", text };
+  }
+
+  // Attaching only your own uploads matters: the right to download follows the
+  // message, so a guessed fileId must not open someone else's file.
+  async #buildFileContent(userId, fileId, caption) {
+    const file = await this.#files.findById(fileId);
+    if (file?.uploadedBy !== userId) {
+      throw new ServiceError("file_not_found", "File not found");
+    }
+    const content = { type: "file", fileId: file.id };
+    if (caption === undefined) {
+      return content;
+    }
+    if (typeof caption !== "string") {
+      throw new ServiceError("invalid_message", "Caption must be text");
+    }
+    // A caption is optional, so a blank one is dropped rather than refused.
+    if (caption.trim() === "") {
+      return content;
+    }
+    this.#checkLength(caption);
+    return { ...content, text: caption };
+  }
+
+  #checkLength(text) {
     if (text.length > MAX_TEXT_LENGTH) {
       throw new ServiceError(
         "message_too_long",
         `Message is longer than ${MAX_TEXT_LENGTH} characters`,
       );
     }
-    return { type: "text", text };
-  }
-
-  // Attaching only your own uploads matters: the right to download follows the
-  // message, so a guessed fileId must not open someone else's file.
-  async #buildFileContent(userId, fileId) {
-    const file = await this.#files.findById(fileId);
-    if (file?.uploadedBy !== userId) {
-      throw new ServiceError("file_not_found", "File not found");
-    }
-    return { type: "file", fileId: file.id };
   }
 
   async #describeChat(chat, userId) {
@@ -196,6 +212,7 @@ export class ChatService {
       from,
       type,
       file: { id: file.id, name: file.name, size: file.size },
+      text,
       sentAt,
     };
   }

@@ -84,6 +84,25 @@ describe("sending a file", () => {
     assert.deepEqual(Buffer.from(await downloaded.arrayBuffer()), content);
   });
 
+  it("brings its caption to the other person", async (t) => {
+    const { url, anna, boris, chat, annaSocket } = await setUpChat(t);
+    const borisSocket = await TestSocket.open(t, url, boris.cookie);
+    const { file } = await (
+      await upload(url, anna.cookie, "a.txt", "x")
+    ).json();
+
+    annaSocket.send("message.send", {
+      chatId: chat.id,
+      clientId: "c1",
+      fileId: file.id,
+      text: "посмотри к вечеру",
+    });
+    const { message } = await borisSocket.next("message.new");
+
+    assert.equal(message.file.id, file.id);
+    assert.equal(message.text, "посмотри к вечеру");
+  });
+
   it("shows the file as the last message of the chat", async (t) => {
     const { url, anna, boris, chat, annaSocket } = await setUpChat(t);
     const { file } = await (

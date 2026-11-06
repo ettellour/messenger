@@ -12,6 +12,13 @@ import { makeTempDir } from "./helpers.js";
 const ANNA = { id: "ANNA0000", name: "Анна", codeHash: "a", createdAt: 1 };
 const BORIS = { id: "BRS00000", name: "Борис", codeHash: "b", createdAt: 1 };
 const VERA = { id: "VERA0000", name: "Вера", codeHash: "c", createdAt: 1 };
+const ANNA_FILE = {
+  id: "f1",
+  uploadedBy: ANNA.id,
+  name: "отчёт.pdf",
+  size: 3,
+  uploadedAt: 1,
+};
 
 async function createRepositories(dir, now) {
   const store = (name, initialData) =>
@@ -221,6 +228,54 @@ describe("sendMessage", () => {
 
     assert.equal(created, true);
   });
+
+  it("keeps a caption with a file and drops a blank one", async (t) => {
+    const { service, files } = await createService(t);
+    const chat = await openChat(service);
+    await files.add(ANNA_FILE);
+    const sendFile = (clientId, text) =>
+      service.sendMessage(ANNA.id, {
+        chatId: chat.id,
+        clientId,
+        fileId: ANNA_FILE.id,
+        text,
+      });
+
+    const captioned = await sendFile("c1", "посмотри к вечеру");
+    const blank = await sendFile("c2", " \n ");
+    const plain = await sendFile("c3");
+
+    assert.equal(captioned.message.type, "file");
+    assert.equal(captioned.message.file.name, "отчёт.pdf");
+    assert.equal(captioned.message.text, "посмотри к вечеру");
+    assert.equal(blank.message.text, undefined);
+    assert.equal(plain.message.text, undefined);
+    const { messages } = await service.getHistory(chat.id, BORIS.id, {});
+    assert.equal(messages[0].text, "посмотри к вечеру");
+  });
+
+  const badCaptions = [
+    ["a caption over the limit", "x".repeat(4001), "message_too_long"],
+    ["a caption that is not text", 1, "invalid_message"],
+  ];
+
+  for (const [name, text, code] of badCaptions) {
+    it(`refuses ${name}`, async (t) => {
+      const { service, files } = await createService(t);
+      const chat = await openChat(service);
+      await files.add(ANNA_FILE);
+
+      await assert.rejects(
+        service.sendMessage(ANNA.id, {
+          chatId: chat.id,
+          clientId: "c1",
+          fileId: ANNA_FILE.id,
+          text,
+        }),
+        { code },
+      );
+    });
+  }
 
   it("forgets a message it could not save, so a retry can succeed", async () => {
     let isDiskFull = true;

@@ -488,6 +488,10 @@ button.link {
   font-weight: 600;
 }
 
+.message-attachment + .message-text {
+  margin-top: 4px;
+}
+
 .message-file-size,
 .message-meta {
   color: var(--muted);
@@ -516,6 +520,7 @@ button.link {
 
 .composer {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   padding: 8px 16px 12px;
   border-top: 1px solid var(--line);
@@ -526,6 +531,29 @@ button.link {
   display: flex;
   align-items: flex-end;
   gap: 8px;
+}
+
+.attachment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  padding: 4px 4px 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.attachment-file {
+  min-width: 0;
+}
+
+.attachment-name {
+  display: block;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Below this width two columns leave too little room for a line of text. */

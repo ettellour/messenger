@@ -140,7 +140,21 @@
           </div>
 
           <form id="composer" class="composer">
-            <label for="message-input">Сообщение</label>
+            <div id="attachment" class="attachment" hidden>
+              <p class="attachment-file">
+                <span id="attachment-name" class="attachment-name"></span>
+                <span id="attachment-size" class="message-file-size"></span>
+              </p>
+              <button
+                type="button"
+                id="remove-attachment"
+                class="quiet"
+                aria-describedby="attachment-name"
+              >
+                Убрать
+              </button>
+            </div>
+            <label id="message-label" for="message-input">Сообщение</label>
             <p id="composer-error" class="form-error" role="alert" hidden></p>
             <div class="composer-row">
               <button type="button" id="attach-file">Файл</button>
