@@ -43,7 +43,35 @@ TRUST_PROXY=1 npm start
 
 С `TRUST_PROXY=1` cookie сессии получает флаг `Secure`, а лимит попыток входа и регистрации считается по адресу клиента, который прокси дописал последним в `X-Forwarded-For`. `HOST` при этом нужно оставить `127.0.0.1`: иначе к серверу можно подключиться в обход прокси и вписать в заголовок любой адрес.
 
-Caddy сам передаёт серверу исходный `Host`, адрес клиента и WebSocket. В nginx это нужно прописать: `proxy_set_header Host $host`, `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for`, а для `/ws` ещё `proxy_http_version 1.1` и заголовки `Upgrade` и `Connection`. Кроме того, нужен `client_max_body_size 10m`, иначе файлы больше 1 МБ не пройдут.
+Caddy сам передаёт серверу исходный `Host`, адрес клиента и WebSocket. В nginx всё это прописывается вручную, а сертификат и перенаправление с HTTP на HTTPS настраиваются отдельно, например через certbot. Блок `server` для nginx:
+
+```
+server {
+  listen 443 ssl;
+  server_name example.com;
+  ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+  add_header Strict-Transport-Security "max-age=31536000" always;
+  client_max_body_size 10m;
+
+  location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+
+  location /ws {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+  }
+}
+```
+
+Здесь важны три вещи. `Host` берётся из `$http_host`, а не из `$host`: `$host` отбрасывает порт, и на любом порту, кроме 443, сокет получит отказ. Заголовки повторены в обоих `location`, потому что nginx не наследует `proxy_set_header` сверху в блок, где задан хотя бы один свой. Без `client_max_body_size` nginx не пропустит файлы больше 1 МБ.
 
 ## Как пользоваться
 
