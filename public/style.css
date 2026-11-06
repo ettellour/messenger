@@ -524,9 +524,11 @@ button.link {
   color: var(--error);
 }
 
+/* Same width as the conversation above, so the field lines up with it. */
 .composer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 800px);
+  justify-content: center;
   gap: 4px;
   padding: 8px 16px 12px;
   border-top: 1px solid var(--line);
