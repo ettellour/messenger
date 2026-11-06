@@ -48,6 +48,7 @@ describe("sign in over HTTP", () => {
     assert.equal(login.status, 200);
     assert.match(cookie, /HttpOnly/);
     assert.match(cookie, /SameSite=Strict/);
+    assert.doesNotMatch(cookie, /Secure/);
     assert.deepEqual((await me.json()).user, user);
   });
 
@@ -174,6 +175,18 @@ describe("behind a proxy", () => {
     }
 
     assert.equal((await signInFrom(url, "203.0.113.99")).status, 429);
+  });
+
+  it("marks the session cookie Secure", async (t) => {
+    const { url } = await startServer(t, { TRUST_PROXY: "1" });
+    const { code } = await registerUser(url, "Анна");
+
+    const login = await postJson(`${url}/api/login`, { code });
+    const session = login.headers.get("set-cookie").split(";")[0];
+    const logout = await postJson(`${url}/api/logout`, {}, { Cookie: session });
+
+    assert.match(login.headers.get("set-cookie"), /Secure/);
+    assert.match(logout.headers.get("set-cookie"), /Secure/);
   });
 });
 

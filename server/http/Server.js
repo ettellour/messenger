@@ -282,12 +282,11 @@ export class Server {
     }
     const { code } = await readJsonBody(ctx.req);
     const { user, token } = await this.#auth.login(code);
-    sendJson(
-      ctx.res,
-      200,
-      { user },
-      { "Set-Cookie": buildSessionCookie(token, SESSION_LIFETIME_MS / 1000) },
-    );
+    // Only the HTTPS proxy is trusted, so the cookie never needs plain HTTP.
+    const cookie = buildSessionCookie(token, SESSION_LIFETIME_MS / 1000, {
+      secure: this.#trustProxy,
+    });
+    sendJson(ctx.res, 200, { user }, { "Set-Cookie": cookie });
   }
 
   async #logout({ req, res }) {
@@ -296,7 +295,9 @@ export class Server {
       await this.#auth.logout(token);
       this.#sockets.closeSession(token);
     }
-    res.writeHead(204, { "Set-Cookie": buildSessionCookie("", 0) });
+    res.writeHead(204, {
+      "Set-Cookie": buildSessionCookie("", 0, { secure: this.#trustProxy }),
+    });
     res.end();
   }
 
