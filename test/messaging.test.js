@@ -172,7 +172,7 @@ describe("messages between two clients", () => {
     server.child.kill("SIGKILL");
     await server.exited;
 
-    const restarted = await startServer(t, server.dataDir);
+    const restarted = await startServer(t, { DATA_DIR: server.dataDir });
     const response = await getJson(
       `${restarted.url}/api/chats/${chat.id}/messages`,
       anna.cookie,

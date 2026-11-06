@@ -10,6 +10,7 @@ export function readSessionToken(req) {
   return null;
 }
 
-export function buildSessionCookie(token, maxAgeSeconds) {
-  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAgeSeconds}`;
+export function buildSessionCookie(token, maxAgeSeconds, { secure }) {
+  const cookie = `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAgeSeconds}`;
+  return secure ? `${cookie}; Secure` : cookie;
 }

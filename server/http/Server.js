@@ -87,6 +87,18 @@ function buildAttachmentHeader(fileName) {
   return `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`;
 }
 
+// The proxy appends the address it saw to X-Forwarded-For. Entries before it
+// come from the client and can be anything, so only the last one counts.
+function readClientAddress(req, trustProxy) {
+  if (trustProxy) {
+    const lastEntry = req.headers["x-forwarded-for"]?.split(",").at(-1).trim();
+    if (lastEntry) {
+      return lastEntry;
+    }
+  }
+  return req.socket.remoteAddress;
+}
+
 function parseCursor(value) {
   if (value === null) {
     return undefined;
@@ -105,6 +117,7 @@ export class Server {
   #chatService;
   #fileService;
   #sockets;
+  #trustProxy;
   #log;
   #loginAttempts;
   #registerAttempts;
@@ -115,6 +128,7 @@ export class Server {
     fileService,
     sockets,
     publicDir,
+    trustProxy = false,
     log = console.log,
   }) {
     this.#auth = auth;
@@ -122,6 +136,7 @@ export class Server {
     this.#fileService = fileService;
     this.#sockets = sockets;
     this.#publicDir = resolve(publicDir);
+    this.#trustProxy = trustProxy;
     this.#log = log;
 
     const limit = { limit: ATTEMPTS_PER_MINUTE, windowMs: 60_000 };
@@ -236,7 +251,7 @@ export class Server {
   }
 
   #isOverLimit(limiter, { req, res }) {
-    const retryAfter = limiter.hit(req.socket.remoteAddress);
+    const retryAfter = limiter.hit(readClientAddress(req, this.#trustProxy));
     if (retryAfter > 0) {
       sendError(res, 429, "rate_limited", "Too many attempts", {
         "Retry-After": String(retryAfter),
@@ -267,12 +282,11 @@ export class Server {
     }
     const { code } = await readJsonBody(ctx.req);
     const { user, token } = await this.#auth.login(code);
-    sendJson(
-      ctx.res,
-      200,
-      { user },
-      { "Set-Cookie": buildSessionCookie(token, SESSION_LIFETIME_MS / 1000) },
-    );
+    // Only the HTTPS proxy is trusted, so the cookie never needs plain HTTP.
+    const cookie = buildSessionCookie(token, SESSION_LIFETIME_MS / 1000, {
+      secure: this.#trustProxy,
+    });
+    sendJson(ctx.res, 200, { user }, { "Set-Cookie": cookie });
   }
 
   async #logout({ req, res }) {
@@ -281,7 +295,9 @@ export class Server {
       await this.#auth.logout(token);
       this.#sockets.closeSession(token);
     }
-    res.writeHead(204, { "Set-Cookie": buildSessionCookie("", 0) });
+    res.writeHead(204, {
+      "Set-Cookie": buildSessionCookie("", 0, { secure: this.#trustProxy }),
+    });
     res.end();
   }
 

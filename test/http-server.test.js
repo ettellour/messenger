@@ -3,6 +3,7 @@ import { createServer, request } from "node:http";
 import { once } from "node:events";
 import { describe, it } from "node:test";
 import {
+  makeTempDir,
   postJson,
   registerUser,
   signUp,
@@ -47,6 +48,7 @@ describe("sign in over HTTP", () => {
     assert.equal(login.status, 200);
     assert.match(cookie, /HttpOnly/);
     assert.match(cookie, /SameSite=Strict/);
+    assert.doesNotMatch(cookie, /Secure/);
     assert.deepEqual((await me.json()).user, user);
   });
 
@@ -88,7 +90,7 @@ describe("sign in over HTTP", () => {
     first.child.kill("SIGTERM");
     await first.exited;
 
-    const second = await startServer(t, first.dataDir);
+    const second = await startServer(t, { DATA_DIR: first.dataDir });
     const me = await fetch(`${second.url}/api/me`, {
       headers: { Cookie: cookie },
     });
@@ -141,6 +143,50 @@ describe("sign in over HTTP", () => {
     });
 
     assert.equal(response.status, 413);
+  });
+});
+
+describe("behind a proxy", () => {
+  const signInFrom = (url, forwardedFor) =>
+    postJson(
+      `${url}/api/login`,
+      { code: "0000-0000-0000-0000" },
+      { "X-Forwarded-For": forwardedFor },
+    );
+
+  it("limits sign-in attempts by the address the proxy added", async (t) => {
+    const { url } = await startServer(t, { TRUST_PROXY: "1" });
+
+    // Entries before the last one are the client's own and change every time.
+    for (let index = 0; index < 10; index += 1) {
+      const response = await signInFrom(url, `10.0.0.${index}, 203.0.113.1`);
+      assert.equal(response.status, 401);
+    }
+
+    assert.equal((await signInFrom(url, "203.0.113.1")).status, 429);
+    assert.equal((await signInFrom(url, "203.0.113.2")).status, 401);
+  });
+
+  it("ignores X-Forwarded-For without TRUST_PROXY", async (t) => {
+    const { url } = await startServer(t);
+
+    for (let index = 0; index < 10; index += 1) {
+      assert.equal((await signInFrom(url, `203.0.113.${index}`)).status, 401);
+    }
+
+    assert.equal((await signInFrom(url, "203.0.113.99")).status, 429);
+  });
+
+  it("marks the session cookie Secure", async (t) => {
+    const { url } = await startServer(t, { TRUST_PROXY: "1" });
+    const { code } = await registerUser(url, "Анна");
+
+    const login = await postJson(`${url}/api/login`, { code });
+    const session = login.headers.get("set-cookie").split(";")[0];
+    const logout = await postJson(`${url}/api/logout`, {}, { Cookie: session });
+
+    assert.match(login.headers.get("set-cookie"), /Secure/);
+    assert.match(logout.headers.get("set-cookie"), /Secure/);
   });
 });
 
@@ -258,5 +304,16 @@ describe("server process", () => {
 
     assert.equal(exitCode, 1);
     assert.match(server.output.stderr, /PORT must be a number/);
+  });
+
+  it("explains the failure when TRUST_PROXY is invalid", async (t) => {
+    const server = startProcess(t, {
+      TRUST_PROXY: "yes",
+      DATA_DIR: await makeTempDir(t),
+    });
+    const [exitCode] = await server.exited;
+
+    assert.equal(exitCode, 1);
+    assert.match(server.output.stderr, /TRUST_PROXY must be 1 or 0/);
   });
 });
