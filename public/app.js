@@ -113,7 +113,7 @@ class App {
     const socket = this.#socket;
 
     socket.addEventListener("connected", () => {
-      byId("connection-banner").hidden = true;
+      byId("connection-banner").textContent = "";
       this.#chatView.refreshConnectionState();
       // Whatever was written before the server knew this connection was not pushed
       // to it, and a page's first connection opens after its first requests.
@@ -121,7 +121,10 @@ class App {
       this.#chatView.catchUp();
     });
     socket.addEventListener("disconnected", () => {
-      byId("connection-banner").hidden = false;
+      // Screen readers announce a status when its text changes, not when it
+      // appears, so the banner stays in the page and only its text comes and goes.
+      byId("connection-banner").textContent =
+        "Нет связи. Сообщения уйдут, когда она вернётся.";
       this.#chatView.refreshConnectionState();
       this.#signOutIfSessionIsGone();
     });
@@ -224,7 +227,7 @@ class App {
     this.#socket.disconnect();
     this.#chatView.reset(null);
     this.#chatList.reset(null);
-    byId("connection-banner").hidden = true;
+    byId("connection-banner").textContent = "";
     byId("messenger").removeAttribute("data-chat-open");
     history.replaceState(null, "", location.pathname);
     this.#showScreen("sign-in");

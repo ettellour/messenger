@@ -267,6 +267,12 @@ button.link {
   font-size: 14px;
 }
 
+/* An empty banner takes no room but stays in the page as a live region. */
+.banner:empty {
+  padding: 0;
+  border-bottom: 0;
+}
+
 .sidebar {
   grid-row: 2;
   display: flex;

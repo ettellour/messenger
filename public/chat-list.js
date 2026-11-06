@@ -83,14 +83,23 @@ export class ChatList {
     const newestFirst = [...this.#chats.values()].sort(
       (a, b) => b.updatedAt - a.updatedAt,
     );
+    // The new rows replace the focused one, and focus would fall back to the
+    // start of the page, so it moves to the same chat's new row.
+    const focusedChatId = this.#list.contains(document.activeElement)
+      ? document.activeElement.dataset.chatId
+      : null;
     this.#list.replaceChildren(
       ...newestFirst.map((chat) => this.#createRow(chat)),
     );
+    if (focusedChatId) {
+      this.#list.querySelector(`[data-chat-id="${focusedChatId}"]`)?.focus();
+    }
   }
 
   #createRow(chat) {
     const row = createElement("a", "chat-row");
     row.href = `#/chat/${chat.id}`;
+    row.dataset.chatId = chat.id;
     if (chat.id === this.#openChatId) {
       row.setAttribute("aria-current", "true");
     }
