@@ -95,7 +95,7 @@ export class ChatRepository {
     return { messages: messages.slice(start, end), hasMore: start > 0 };
   }
 
-  async messagesAfter(chatId, afterId, limit) {
+  async messagesAfter(chatId, afterId, limit = Infinity) {
     const messages = this.#messagesOf(chatId);
     const firstNewer = messages.findIndex(({ id }) => id > afterId);
     if (firstNewer === -1) {
@@ -112,35 +112,15 @@ export class ChatRepository {
     return this.#messagesOf(chatId).at(-1) ?? null;
   }
 
-  async countUnread(chat, userId) {
-    const lastRead = chat.lastRead[userId] ?? 0;
-    const messages = this.#messagesOf(chat.id);
-
-    let unread = 0;
-    for (
-      let i = messages.length - 1;
-      i >= 0 && messages[i].id > lastRead;
-      i--
-    ) {
-      if (messages[i].from !== userId) {
-        unread += 1;
-      }
-    }
-    return unread;
-  }
-
   async setLastRead(chat, userId, messageId) {
     chat.lastRead[userId] = messageId;
     await this.#chatStore.save();
   }
 
-  async isFileSharedWith(fileId, userId) {
-    for (const chatId of this.#chatIdsByFile.get(fileId) ?? []) {
-      if (this.#chatsById.get(chatId).members.includes(userId)) {
-        return true;
-      }
-    }
-    return false;
+  async chatsWithFile(fileId) {
+    return [...(this.#chatIdsByFile.get(fileId) ?? [])].map((chatId) =>
+      this.#chatsById.get(chatId),
+    );
   }
 
   // Stays monotonic when the clock jumps back or a millisecond holds several messages.
