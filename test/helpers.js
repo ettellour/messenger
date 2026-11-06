@@ -18,7 +18,8 @@ export async function makeTempDir(t) {
 
 export function startProcess(t, env) {
   const child = spawn(process.execPath, [ENTRY_POINT], {
-    env: { ...process.env, HOST: "127.0.0.1", ...env },
+    // TRUST_PROXY exported in the shell would change what the tests expect.
+    env: { ...process.env, HOST: "127.0.0.1", TRUST_PROXY: "0", ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
   t.after(() => child.kill("SIGKILL"));
@@ -36,9 +37,9 @@ export function startProcess(t, env) {
   return { child, output, exited };
 }
 
-export async function startServer(t, dataDir) {
-  const directory = dataDir ?? (await makeTempDir(t));
-  const server = startProcess(t, { PORT: "0", DATA_DIR: directory });
+export async function startServer(t, env = {}) {
+  const dataDir = env.DATA_DIR ?? (await makeTempDir(t));
+  const server = startProcess(t, { PORT: "0", ...env, DATA_DIR: dataDir });
 
   while (!/http:\/\/\S+/.test(server.output.stdout)) {
     if (server.child.exitCode !== null) {
@@ -47,7 +48,7 @@ export async function startServer(t, dataDir) {
     await once(server.child.stdout, "data");
   }
   const url = server.output.stdout.match(/http:\/\/\S+/)[0];
-  return { ...server, url, dataDir: directory };
+  return { ...server, url, dataDir };
 }
 
 export function maskedFrame(firstByte, payload) {

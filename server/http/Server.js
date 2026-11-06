@@ -87,6 +87,18 @@ function buildAttachmentHeader(fileName) {
   return `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`;
 }
 
+// The proxy appends the address it saw to X-Forwarded-For. Entries before it
+// come from the client and can be anything, so only the last one counts.
+function readClientAddress(req, trustProxy) {
+  if (trustProxy) {
+    const lastEntry = req.headers["x-forwarded-for"]?.split(",").at(-1).trim();
+    if (lastEntry) {
+      return lastEntry;
+    }
+  }
+  return req.socket.remoteAddress;
+}
+
 function parseCursor(value) {
   if (value === null) {
     return undefined;
@@ -105,6 +117,7 @@ export class Server {
   #chatService;
   #fileService;
   #sockets;
+  #trustProxy;
   #log;
   #loginAttempts;
   #registerAttempts;
@@ -115,6 +128,7 @@ export class Server {
     fileService,
     sockets,
     publicDir,
+    trustProxy = false,
     log = console.log,
   }) {
     this.#auth = auth;
@@ -122,6 +136,7 @@ export class Server {
     this.#fileService = fileService;
     this.#sockets = sockets;
     this.#publicDir = resolve(publicDir);
+    this.#trustProxy = trustProxy;
     this.#log = log;
 
     const limit = { limit: ATTEMPTS_PER_MINUTE, windowMs: 60_000 };
@@ -236,7 +251,7 @@ export class Server {
   }
 
   #isOverLimit(limiter, { req, res }) {
-    const retryAfter = limiter.hit(req.socket.remoteAddress);
+    const retryAfter = limiter.hit(readClientAddress(req, this.#trustProxy));
     if (retryAfter > 0) {
       sendError(res, 429, "rate_limited", "Too many attempts", {
         "Retry-After": String(retryAfter),

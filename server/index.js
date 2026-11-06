@@ -22,7 +22,16 @@ function readPort() {
   return port;
 }
 
+function readTrustProxy() {
+  const value = process.env.TRUST_PROXY || "0";
+  if (value !== "0" && value !== "1") {
+    throw new Error(`TRUST_PROXY must be 1 or 0, got "${value}"`);
+  }
+  return value === "1";
+}
+
 async function createServerFromEnv() {
+  const trustProxy = readTrustProxy();
   const dataDir = resolve(process.env.DATA_DIR || "data");
   const store = (name, initialData) =>
     new JsonStore(join(dataDir, `${name}.json`), initialData);
@@ -57,6 +66,7 @@ async function createServerFromEnv() {
     fileService,
     sockets,
     publicDir: PUBLIC_DIR,
+    trustProxy,
   });
 }
 

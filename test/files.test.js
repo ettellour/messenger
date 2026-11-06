@@ -143,7 +143,7 @@ describe("sending a file", () => {
     server.child.kill("SIGKILL");
     await server.exited;
 
-    const restarted = await startServer(t, server.dataDir);
+    const restarted = await startServer(t, { DATA_DIR: server.dataDir });
     const response = await download(restarted.url, file.id, server.anna.cookie);
 
     assert.equal(await response.text(), "сохранено");
@@ -370,7 +370,7 @@ describe("upload limits", () => {
     child.kill("SIGKILL");
     await exited;
 
-    await startServer(t, dataDir);
+    await startServer(t, { DATA_DIR: dataDir });
 
     assert.deepEqual(await readdir(dir), [file.id]);
   });
