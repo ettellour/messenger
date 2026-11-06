@@ -22,6 +22,7 @@ export class ChatView {
   #isLoaded = false;
   #lastReadSent = 0;
   #lastShownAt = null;
+  #attachedFile = null;
 
   #root = document.getElementById("chat");
   #placeholder = document.getElementById("no-chat");
@@ -35,7 +36,11 @@ export class ChatView {
   #retry = document.getElementById("chat-retry");
   #composer = document.getElementById("composer");
   #input = document.getElementById("message-input");
+  #inputLabel = document.getElementById("message-label");
   #fileInput = document.getElementById("file-input");
+  #attachment = document.getElementById("attachment");
+  #attachmentName = document.getElementById("attachment-name");
+  #attachmentSize = document.getElementById("attachment-size");
   #composerError = document.getElementById("composer-error");
 
   constructor(api, socket) {
@@ -44,12 +49,12 @@ export class ChatView {
 
     this.#composer.addEventListener("submit", (event) => {
       event.preventDefault();
-      this.#sendText();
+      this.#send();
     });
     this.#input.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
         event.preventDefault();
-        this.#sendText();
+        this.#send();
       }
     });
     this.#input.addEventListener("input", () => this.#fitInputToText());
@@ -57,7 +62,13 @@ export class ChatView {
     document
       .getElementById("attach-file")
       .addEventListener("click", () => this.#fileInput.click());
-    this.#fileInput.addEventListener("change", () => this.#sendChosenFile());
+    this.#fileInput.addEventListener("change", () => this.#attachChosenFile());
+    document
+      .getElementById("remove-attachment")
+      .addEventListener("click", () => {
+        this.#detachFile();
+        this.#input.focus();
+      });
 
     this.#loadOlder.addEventListener("click", () => this.#showOlderMessages());
     this.#retry.addEventListener("click", () => this.#loadHistory());
@@ -78,6 +89,7 @@ export class ChatView {
     this.#name.textContent = chat.peer.name;
     this.#peerId.textContent = formatUserId(chat.peer.id);
     showError(this.#composerError, "");
+    this.#detachFile();
 
     if (matchMedia("(min-width: 720px)").matches) {
       this.#input.focus();
@@ -90,6 +102,7 @@ export class ChatView {
     this.#messages.clear();
     this.#isLoaded = false;
     this.#list.replaceChildren();
+    this.#detachFile();
     this.#root.hidden = true;
     this.#placeholder.hidden = false;
   }
@@ -273,11 +286,12 @@ export class ChatView {
 
   #createMessage(message) {
     const element = this.#createBubble(message.from === this.#myId);
-    element.append(
-      message.type === "file"
-        ? this.#createDownload(message.file)
-        : createElement("p", "message-text", message.text),
-    );
+    if (message.type === "file") {
+      element.append(this.#createDownload(message.file));
+    }
+    if (message.text !== undefined) {
+      element.append(createElement("p", "message-text", message.text));
+    }
 
     const meta = createElement("p", "message-meta");
     meta.append(createElement("time", "", formatTime(message.sentAt)));
@@ -290,7 +304,7 @@ export class ChatView {
   }
 
   #createDownload(file) {
-    const wrapper = document.createElement("div");
+    const wrapper = createElement("div", "message-attachment");
     const link = createElement("a", "message-file", file.name);
     link.href = `/api/files/${file.id}`;
     link.download = file.name;
@@ -299,6 +313,14 @@ export class ChatView {
       createElement("span", "message-file-size", formatFileSize(file.size)),
     );
     return wrapper;
+  }
+
+  #send() {
+    if (this.#attachedFile) {
+      this.#sendFile();
+    } else {
+      this.#sendText();
+    }
   }
 
   #sendText() {
@@ -316,7 +338,26 @@ export class ChatView {
     this.#socket.sendMessage(this.#toPayload(outgoing));
   }
 
-  #sendChosenFile() {
+  #sendFile() {
+    const caption = this.#input.value;
+    showError(this.#composerError, "");
+
+    const outgoing = {
+      clientId: newClientId(),
+      chatId: this.openChatId,
+      file: this.#attachedFile,
+      text: caption.trim() === "" ? undefined : caption,
+    };
+    this.#outgoing.set(outgoing.clientId, outgoing);
+    this.#detachFile();
+    this.#input.value = "";
+    this.#fitInputToText();
+    this.#showOutgoing(outgoing);
+    this.#uploadAndSend(outgoing);
+  }
+
+  // The file waits in the composer, so a caption can be written before sending.
+  #attachChosenFile() {
     const [file] = this.#fileInput.files;
     this.#fileInput.value = "";
     if (!file) {
@@ -328,10 +369,18 @@ export class ChatView {
     }
     showError(this.#composerError, "");
 
-    const outgoing = { clientId: newClientId(), chatId: this.openChatId, file };
-    this.#outgoing.set(outgoing.clientId, outgoing);
-    this.#showOutgoing(outgoing);
-    this.#uploadAndSend(outgoing);
+    this.#attachedFile = file;
+    this.#attachmentName.textContent = file.name;
+    this.#attachmentSize.textContent = formatFileSize(file.size);
+    this.#attachment.hidden = false;
+    this.#inputLabel.textContent = "Подпись к файлу";
+    this.#input.focus();
+  }
+
+  #detachFile() {
+    this.#attachedFile = null;
+    this.#attachment.hidden = true;
+    this.#inputLabel.textContent = "Сообщение";
   }
 
   async #uploadAndSend(outgoing) {
@@ -369,7 +418,7 @@ export class ChatView {
   }
 
   #toPayload({ chatId, clientId, text, fileId }) {
-    return fileId ? { chatId, clientId, fileId } : { chatId, clientId, text };
+    return { chatId, clientId, text, fileId };
   }
 
   #showOutgoing(outgoing) {
@@ -386,7 +435,7 @@ export class ChatView {
     }
 
     if (outgoing.file) {
-      const wrapper = document.createElement("div");
+      const wrapper = createElement("div", "message-attachment");
       wrapper.append(
         createElement("span", "message-file", outgoing.file.name),
         createElement(
@@ -396,7 +445,8 @@ export class ChatView {
         ),
       );
       element.append(wrapper);
-    } else {
+    }
+    if (outgoing.text !== undefined) {
       element.append(createElement("p", "message-text", outgoing.text));
     }
     element.append(this.#createOutgoingMeta(outgoing));
