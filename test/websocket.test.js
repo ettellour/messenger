@@ -140,9 +140,9 @@ describe("WebSocket handshake", () => {
       const { port } = await startSocketServer(t);
 
       const client = await openRawClient(t, port, overrides);
-      await client.ended;
 
       assert.equal(readStatus(client), status);
+      await client.ended;
     });
   }
 });
