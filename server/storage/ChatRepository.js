@@ -97,10 +97,8 @@ export class ChatRepository {
 
   async messagesAfter(chatId, afterId, limit = Infinity) {
     const messages = this.#messagesOf(chatId);
-    const firstNewer = messages.findIndex(({ id }) => id > afterId);
-    if (firstNewer === -1) {
-      return { messages: [], hasMore: false };
-    }
+    // What is newer sits at the end, and usually there is little of it.
+    const firstNewer = messages.findLastIndex(({ id }) => id <= afterId) + 1;
     const end = firstNewer + limit;
     return {
       messages: messages.slice(firstNewer, end),

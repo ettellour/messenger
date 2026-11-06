@@ -20,6 +20,7 @@ export class ChatView {
   #outgoing = new Map();
   #hasOlder = false;
   #isLoaded = false;
+  #historyLoad = null;
   #lastReadSent = 0;
   #lastShownAt = null;
   #attachedFile = null;
@@ -151,6 +152,12 @@ export class ChatView {
     if (!chatId) {
       return;
     }
+    // A history request already on its way may have been answered before the
+    // server knew this connection. Once it is in, only what came later is asked for.
+    await this.#historyLoad;
+    if (chatId !== this.openChatId) {
+      return;
+    }
     // The history may have failed to load while the connection was down.
     if (!this.#isLoaded) {
       await this.#loadHistory();
@@ -186,7 +193,12 @@ export class ChatView {
     }
   }
 
-  async #loadHistory() {
+  #loadHistory() {
+    this.#historyLoad = this.#requestHistory();
+    return this.#historyLoad;
+  }
+
+  async #requestHistory() {
     const chatId = this.openChatId;
     this.#isLoaded = false;
     this.#messages.clear();
