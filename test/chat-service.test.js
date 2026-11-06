@@ -322,6 +322,28 @@ describe("history", () => {
     assert.equal(hasMore, false);
   });
 
+  it("pages forward when more than a page is newer", async (t) => {
+    const { service, chat, ids } = await createChatWithMessages(t, 202);
+
+    const first = await service.getHistory(chat.id, BORIS.id, {
+      after: ids[0],
+    });
+    const second = await service.getHistory(chat.id, BORIS.id, {
+      after: first.messages.at(-1).id,
+    });
+
+    assert.deepEqual(
+      first.messages.map(({ id }) => id),
+      ids.slice(1, 201),
+    );
+    assert.equal(first.hasMore, true);
+    assert.deepEqual(
+      second.messages.map(({ id }) => id),
+      ids.slice(201),
+    );
+    assert.equal(second.hasMore, false);
+  });
+
   it("returns nothing newer than the last message", async (t) => {
     const { service, chat, ids } = await createChatWithMessages(t, 2);
 
