@@ -221,7 +221,7 @@ export class ChatView {
       this.#markRead();
     } catch {
       if (chatId === this.openChatId) {
-        this.#showStatus("Не получилось загрузить сообщения.", {
+        this.#showStatus("Не получилось загрузить сообщения", {
           canRetry: true,
         });
       }

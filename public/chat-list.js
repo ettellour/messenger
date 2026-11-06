@@ -47,7 +47,7 @@ export class ChatList {
       this.#hasLoaded = true;
       this.#render();
     } catch {
-      this.#showStatus("Не получилось загрузить чаты.", { canRetry: true });
+      this.#showStatus("Не получилось загрузить чаты", { canRetry: true });
     }
   }
 
