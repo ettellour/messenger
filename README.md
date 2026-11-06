@@ -4,7 +4,7 @@
 
 ## Запуск
 
-Нужен только Node.js 22 или новее. `npm install` не нужен: зависимостей нет.
+Нужны Node.js 22 или новее и npm. Зависимостей нет, поэтому `npm install` не нужен. На Arch Linux npm ставится отдельным пакетом: `sudo pacman -S nodejs npm`.
 
 ```
 npm start
